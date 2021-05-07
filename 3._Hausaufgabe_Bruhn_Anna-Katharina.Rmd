@@ -97,6 +97,8 @@ books <- books %>%
   mutate(`Publisher` = str_replace(`Publisher`,"à","a")) 
 ```
 
+Im Datensatz werden ale Titel und Autoren klein geschrieben und Sonderzeichen werden entfernt.
+
 ```{r}
 books_w_ratings <- books %>%
   select(ISBN, `Book-Title`, `Book-Author`, `Year-Of-Publication`, Publisher) %>%
@@ -117,16 +119,6 @@ books_ratings_users <- books_ratings_users %>%
 
 Der neu erstellte Datensatz "book_rating_users" wird als csv-Datei gespeichert, damit man mit dem Datensatz weiterarbeiten kann, ohne ihn jedesmal neu erstellen zu müssen.
 
-#--------------
-
-X am Ende der ISBN trotzdem da, nur Buchstaben innerhalb weg.
-
-
-ISBN säubern? was macht man mit den Buchtaben in den ISBNs?
-
-Auch die Ausreißer entfernen?
-
-#----------------
 
 # Association Rules - Der apriori-Algorithmus
 ## Aufgaben
@@ -141,7 +133,7 @@ library(arules)
 ```{r massage=FALSE}
 i <- split(books_ratings_users$`Book-Title`, books_ratings_users$`User-ID`)
 txn <- as(i, "transactions")
-trans.rules <- apriori(txn, parameter=list(supp=0.002, conf=0.5, minlen=2, target="rules"))
+trans.rules <- apriori(txn, parameter=list(supp=0.0015, conf=0.5, minlen=2, target="rules"))
 ```
 ```{r}
 
@@ -156,7 +148,8 @@ library(arulesViz)
 plot(subrules, method = "graph")
 ```
 
-In dem Plot sieht man, dass gerade einzelne Bände einer Reihe eine starke Assoziation haben. Das heißt, dass User die ein Buch einer Reihe, wie "Herr der Ringe" oder "Harry Potter" bewertet haben, haben auch andere Bände der Reihe bewertet. Der Support ist bei den Harry Potter Bänden am größten, der Lift ist bei späteren Bänden einer Reihe höher als beim ersten oder zweiten Band der Reihe.
+In dem Plot sieht man, dass gerade einzelne Bände einer Reihe eine starke Assoziation haben. Das heißt, dass User die ein Buch einer Reihe, wie "Herr der Ringe" oder "Harry Potter" bewertet haben, haben auch andere Bände der Reihe bewertet. Der Support ist bei den Harry Potter Bänden am größten, der Lift ist bei späteren Bänden einer Reihe höher als beim ersten oder zweiten Band der Reihe. Die Assoziation der "Herr der Ringe" Bände ist größer als bei "Harry Potter". Der Hohe Support der "Harry Potter" Bände deutet auf eine viel größere Leserschaft dieser Reihe hin als bei "Herr der Ringe".
+Das es zwischen einzelnen Bänden einer Reihe eine Assoziation zueinander gibt, ist zu erwarten gewesen.
 
 ## Spielen Sie mit den Support- und Confidence-Werten. Was fällt Ihnen auf?
 
@@ -180,34 +173,22 @@ trans.rules <- apriori(txn, parameter=list(supp=0.01, conf=0.001, minlen=2, targ
 
 head(inspect(subset(trans.rules)), 10)
 ```
-Bei einem Support mit eier oder zwei Nachkommastellen findet er noch keine Sets, erst bei einer dreistelligen Nachkommastelle gibt es Ergebnisse. 
+Bei einem Support mit einer oder zwei Nachkommastellen werden keine Sets gefunden, erst bei einer dreistelligen Nachkommastelle gibt es Ergebnisse. Das bedeutet, dass es sehr viele einzelne Bewertungen von Usern gibt, da der Support die Anzahl der Transaktionen mit dieser Item-Kombination geteilt durch alle Transaktionen, ungeachtet dessen, ob weitere Items in der Transaktion waren, ist.
 
+Die Confidence ist der Support für das gleichzeitige Auftreten aller Items in einer Regel, bedingt nur durch den Support für das Left-hand Set. Das Ergebnis ist die Assotiation, die allerdings noch keine Kausalität bedeutet. Eingeordnet wird dies durch den Lift. Der Lift gibt an wie viel häufiger ein Set auftaucht, als wir erwarten würden, wenn die Items unabhängig voneinander wären. 
 
-```{r massage=FALSE}
-i <- split(books_ratings_users$`Book-Title`, books_ratings_users$`User-ID`)
-txn <- as(i, "transactions")
-trans.rules <- apriori(txn, parameter=list(supp=0.0015, conf=0.5, minlen=2, target="rules"))
-```
-
-```{r}
-
-head(inspect(subset(trans.rules)), 10)
-```
-Die Confidence, die nicht von der Menge der Bewerteten Bücher abhängt????, beginnt schon bei der ersten Nachkommastelle, also gibt es einige Sets mit einer hohen Assoziation. WEnn man den Confidence - Wert verändert, wird mal mehr, mal weniger angezeigt, je nach dem wie viele Sets die Bedingung erfüllen.
+Die Confidence beginnt schon bei der ersten Nachkommastelle, also gibt es einige Sets mit einer hohen Assoziation. Wenn man den Confidence - Wert verändert, wird mal mehr, mal weniger angezeigt, je nach dem wie viele Sets die Bedingung erfüllen. Da man keine sehr lange Liste haben will werden nur Sets mit 0.5 oder 50% Assoziation angezeigt.
 
 ## Wir haben jetzt alle Bewertungen drin, ergibt das Sinn? 
 
-Da alle Alle Bücher die von Usern bewertet sind enthalten sind, ist der Support so niedrig, da die Menge an wenig Bewerteten Bücher und mit einer geringer Assoziation den Support so niedrig macht. Der Support ist die Anzahl der User-Bewertungen mit diesen "Book-Title" Kombination geteilt durch alle User-Bewertung, uabhängig davon, ob  der User weitere "Book-Title" bewertet hat.
-Da hier nur Sets mit einer hohen Assoziation, abgebildet in der Condidence und im Lift, interessieren, können Bücher, die nur wenige Bewertungen haben weggelassen werden, da sie den Support verzerren.
+Alle von Usern bewertete Bücher sind im Datensatz enthalten, daher ist der Support niedrig. Grund hierfür ist, dass durch die Menge an wenig bewerteten Büchern mit einer geringen Assoziation den Support niedrig machen. 
+Der Support ist die Anzahl der User-Bewertungen mit diesen "Book-Title"-Kombination geteilt durch alle User-Bewertung, uabhängig davon, ob  der User weitere "Book-Title" bewertet hat.
+Da hier nur Sets mit einer hohen Assoziation (abgebildet in der Condidence und im Lift), interessieren, können Bücher die nur wenige Bewertungen haben weggelassen werden, da sie den Support verzerren.
 
 ## Wie könnte eine bessere Lösung aussehen?
     
 ```{r}
 books_ratings_users1 <- books_ratings_users %>%
-  #group_by(`Book-Rating`, `Book-Title`) %>%
-  #summarise(anzahl_bewertungen = n()) %>%
-  #filter(anzahl_bewertungen <= 100)
-  #select(`Book-Title`, `Book-Rating`, `User-ID`) %>%
   group_by(`Book-Title`) %>%
   mutate(anzahl_bewertungen = n()) %>%
   filter(anzahl_bewertungen > 10) %>%
@@ -225,6 +206,17 @@ trans.rules <- apriori(txn, parameter=list(supp=0.002, conf=0.5, minlen=2, targe
 
 head(inspect(subset(trans.rules)), 10)
 ```
+```{r}
+subrules <- head(trans.rules, n = 15, by = "lift")
+```
+
+```{r}
+library(arulesViz)
+plot(subrules, method = "graph")
+```
+Nach der beseitigung der User mit weniger als 10 Bewertungen sind immer noch Reihen mit der größten Assoziation, jedoch ist der Support gestiegen. 
+
+
 # Erstellen Sie eine Analyse, bei der nicht die Bücher, sondern die Autoren in den Transaktionen enthalten sind
 
 ```{r massage=FALSE}
@@ -249,12 +241,14 @@ plot(subrules, method = "graph")
 
 # Fällt Ihnen etwas in der Datenqualität auf?
 
-Da manche Autoren zwei Vornamen haben, oder der Vorname mal abgekürzt angegeben wurde und mal nicht, kommt es vor, dass in einem Set eine Assoziation eines Autors mit sich selbst in anderer schreibweise hergestellt wird. Allerdings kann man nicht gänzlich ausschließen, dass es nicht tatsächlich zwei unterschiedliche Menschen sind mit einem sehr ähnlichen Namen.
+Da manche Autoren zwei Vornamen haben, oder der Vorname mal abgekürzt angegeben wurde und mal nicht, kommt es vor, dass in einem Set eine Assoziation eines Autors mit sich selbst in anderer Schreibweise hergestellt wird. Allerdings kann man nicht gänzlich ausschließen, dass es nicht tatsächlich zwei unterschiedliche Menschen sind mit einem sehr ähnlichen Namen.Dies muss also zunächst behoben werden, bevor man weiter mit dem Datensatz arbeitet.
 
 # Wie könnte man das mit regulären Ausdrücken beheben?
 
-Meine Ideen, die unterschiedlichen Schreibweisen der Namen zu beheben. Die verschiedenen Schreibweisen führen dazu, dass Bewertungen von Usern zu einem Autor, bei unterschiedlicher Schreibweise, nebeneinander Auftaucht und nicht unter einem Namen gesammelt wird. Meine Ideen dies zu Lösen wären die folgenden vier Ideen.
-Umgesetzt habe ich nur Idee 3 und 4. Ideen 1 und 2 sind nicht praktikabel, da hier die Gefahr der Namensdopplung noch zu hoch ist.
+Die verschiedenen Schreibweisen führen dazu, dass Bewertungen von Usern zu einem Autor, bei unterschiedlicher Schreibweise, nebeneinander auftauchen und nicht unter einem Namen gesammelt werden. Meine Ideen dies zu Lösen sind in den folgenden vier Ideen aufgelistet.
+
+Umgesetzt habe ich nur Idee 3 und 4. 
+Die Ideen 1 und 2 sind nicht praktikabel, da hier die Gefahr der Namensdopplung noch zu hoch ist.
 
 ## Ideen
 
@@ -268,12 +262,12 @@ Bei Abkürzung der Vornamen ist die klarere Zuordnung von Autoren eher gegeben, 
 
 3. Nur erster Vorname und der Nachname
 
-Wenn nur der erste Vorname und der Nachname genommen wird, ist es nicht ganz so uneindeutig, wie nur die Initialien des Vornamens zu verwebden. auch werden die unterschiedlich gesetzten Leerzeichen zwischen den Initialien beseitigt, da es nur eins zwischen Vorname und Nachname gibt.
+Wenn nur der erste Vorname und der Nachname genommen wird, ist es nicht ganz so uneindeutig, wie nur die Initialien des Vornamens zu verwenden. Es werden außerdem die unterschiedlich gesetzten Leerzeichen zwischen den Initialien beseitigt, da es nur ein Leerzeichen zwischen Vorname und Nachname gibt.
 
 4. Mauel alle Namensdoppelungen beheben
 
 Diese Lösung ist eigentlich ungeeignet, da man bei einem sehr großen Datensatz sehr viel Zeit aufwenden müsste. Aber es würde Restfehler, die bei den anderen Lösungen da wären beheben. 
-Effizienter ist jedoch Lösung 3.
+Effizienter und praktikabler ist jedoch Lösung 3.
 
 ## Umzusetzungen der Ideen
 
@@ -293,17 +287,26 @@ trans.rules <- apriori(txn, parameter=list(supp=0.006, conf=0.5, minlen=2, targe
 ```{r}
 head(inspect(subset(trans.rules)), 10)
 ```    
+```{r}
+subrules <- head(trans.rules, n = 15, by = "lift")
+```
 
-4. Mauel alle Namensdoppelungen beheben
+```{r}
+library(arulesViz)
+plot(subrules, method = "graph")
+```
+Hier hat man nun die Autoren mit der höchsten Assoziation aufgeführt, nach beseitigung der Namensdoppelung.
 
-Hier habe ich nicht den ganzen Datensatz bearbeitet, ich habe lediglich die Autoren die doppelt mit einer hohen Assoziation erschienen, angeglichen.
+
+4. Mauel alle Namensdoppelungen beheben (eher unpraktisch)
+
+Hier habe ich nicht den ganzen Datensatz bearbeitet, ich habe lediglich die Autoren die doppelt mit einer hohen Assoziation erschienen, angeglichen. Es besteht somit aber das Problem, das Autoren, die nun unter verschiedenen Schreibweisen aufgeführt werden, nicht bei den Autoren mit einer hohen Assoziation auftauen, obwohl sie es möglicherweise bei einer Zusammenführung der Schreibweisen würden, nicht angepasst werden.
 
 ```{r}
 books_ratings_users3 <- books_ratings_users1 %>%
-  #mutate(`Book-Author` = str_remove(`Book-Author`," "))
   mutate(`Book-Author` = str_replace(`Book-Author`,"tim f. lahaye","tim lahaye")) %>%
   mutate(`Book-Author` = str_replace(`Book-Author`,"r. l. stine","r.l. stine")) %>%
-mutate(`Book-Author` = str_replace(`Book-Author`,"patricia daniels cornwell","patricia d. cornwell")) 
+  mutate(`Book-Author` = str_replace(`Book-Author`,"patricia daniels cornwell","patricia d. cornwell")) 
 ```
 ```{r massage=FALSE}
 i <- split(books_ratings_users3$`Book-Author`, books_ratings_users3$`User-ID`)
@@ -315,52 +318,80 @@ head(inspect(subset(trans.rules)), 10)
 ```    
 ## Wie kann man nun noch sicherstellen, dass nur die Autoren weiterempfohlen werden, deren Bücher man auch (mehrheitlich) gut fand?
 
-Es gibt zwei Möglichkeiten, wie man dies bestimmen könnte, in dem man die Durchschnittsbewertung der Authoren berechnet und dies als Grundlage zur darstellung der Assoziations-Regeln nimmt oder alle Bewertungen die schlechter als 7 weglässt und die Assoziations-Regeln berechnet, so sind alle niedrigen Bewerungen nicht mehr Teil der Darstellung.
+Es gibt zwei Möglichkeiten, wie man dies bestimmen könnte, indem man die Durchschnittsbewertung der Authoren berechnet und dies als Grundlage zur Darstellung der Assoziations-Regeln nimmt oder alle Bewertungen die schlechter als 7 sind weglässt und die Assoziations-Regeln berechnet, so sind alle niedrigen Bewerungen nicht mehr Teil der Darstellung.
+
+1. Möglichkeit: 
 
 ```{r}
-durchschnitt_ratings <- books_ratings_users %>%
- group_by(`Book-Author`, `User-ID`) %>%
+durchschnitt_ratings <- books_ratings_users2 %>%
+  group_by(`Book-Author`) %>%
+  select(`User-ID`, `Book-Title`, `Book-Author`, `Book-Rating`) %>%
   drop_na(`Book-Rating`) %>% 
-  summarize(durchschnittsbewertung = mean(`Book-Rating`), anzahl_bewertungen = n ()) %>%
+  summarize(durchschnittsbewertung = mean(`Book-Rating`), anzahl_bewertungen = n (),`User-ID`) %>%
   filter(anzahl_bewertungen >= 10) %>%
-  #mutate(durchschnittsbewertung) %>%
-  arrange(desc(durchschnittsbewertung))
+  arrange(desc(durchschnittsbewertung)) %>%
+  ungroup()
 ```
 
-Zunächst wird die Durchschnittsbewertung ermittelt, um sicherzustellen, dass nur die Bücher weiterempfolen werden, die mehrheitlich gut gefunden werden. Schließlich wird hier die Assoziation bestimmt.
+Zunächst wird die Durchschnittsbewertung ermittelt, um sicherzustellen, dass nur die Bücher weiterempfolen werden, die mehrheitlich gut gefunden werden. 
 
 ```{r massage=FALSE}
-i <- split(durchschnitt_ratings$`durchschnittsbewertung`, durchschnitt_ratings$`User-ID`)
+i <- split(durchschnitt_ratings$`Book-Author`, durchschnitt_ratings$`User-ID`)
 txn <- as(i, "transactions")
-trans.rules <- apriori(txn, parameter=list(supp=0.0015, conf=0.6, minlen=2, target="rules"))
+trans.rules <- apriori(txn, parameter=list(supp=0.0018, conf=0.05, minlen=2, target="rules"))
 ```    
 ```{r}
 head(inspect(subset(trans.rules)), 10)
 ```     
-
-2. Möglichkeit, man entfernt die 
+In der oberen Liste werden die Assoziationsregeln angezeigt, die auf Grundlage der Durchschnittsbewertung der Autoren durch User ermittelt wurden. 
 
 ```{r}
-books_ratings_users2 <- books_ratings_users %>%
-  filter(`Book-Rating` >= 7)
+subrules <- head(trans.rules, n = 15, by = "lift")
+```
+
+```{r}
+library(arulesViz)
+plot(subrules, method = "graph")
+```
+In der oberen Grafik sind die Autoren abgebildet, die mehrheitlich von den Usern gut bewertet wurden und deren Assoziation zueinander. 
+Es gibt zwei Komplexe,einen großen, bei dem stephen king und dean koontz in der Mitte sind und zu john grisham, patricia cornwell und james patterson und anderen eine Assoziation haben. Die Kreise sind relativ groß, sie haben also einen recht großen Support aber einen unterschiedlich großen Lift, da die Kreise eine leicht rosa Färbung und einige auch pink sind. Der zweite Komplex besteht aus zwei Autoren die einen niedrigen Support aber einen recht hohen Lift haben.
+
+2. Möglichkeit, man entfernt die Book-Ratings mit weniger als 7, jetzt wären nur noch die hohen Raitings übrig. 
+
+Jedoch ist Lösung 1, den Duchschnitt zu errechnen um, zu Ermitteln welche Autoren mehrheitlich gut gefunden wurden, die bessere Lösung. Hier werden nämlich auch die schlechten Bewertungen mit einbezogen, die bei der 2. Möglichkeit nicht gewertet werden würde, aber bei einer mehrheitlichen Bewertung mit einbezogen werden muss.
+
+```{r}
+moeglichkeit_2 <- books_ratings_users2 %>%
+  filter(`Book-Rating` > 7)
 ```
 
 ```{r massage=FALSE}
-i <- split(books_ratings_users2$`Book-Author`, books_ratings_users2$`User-ID`)
+i <- split(moeglichkeit_2$`Book-Author`, moeglichkeit_2$`User-ID`)
 txn <- as(i, "transactions")
-trans.rules <- apriori(txn, parameter=list(supp=0.0015, conf=0.6, minlen=2, target="rules"))
+trans.rules <- apriori(txn, parameter=list(supp=0.0018, conf=0.1, minlen=2, target="rules"))
 ```  
 
 ```{r}
 head(inspect(subset(trans.rules)), 10)
 ```     
+```{r}
+subrules <- head(trans.rules, n = 15, by = "lift")
+```
+
+```{r}
+library(arulesViz)
+plot(subrules, method = "graph")
+```
+Das Ergebnis ist nun sehr unterschiedlich zur ersten Möglichkeit. ES bestehen weniger Assoziationen untereinander, die Autoren sind aufgesplitterter. 
+
+Im Ergebis ist diese Lösung nicht geeignet, da sie die eher schlechten Bewertungen der User nicht mit in die Assoziations-Regeln der Autoren berücksichtigt werden. Aber wenn man die mehrheitlich gut gefundenen Autoren ermitteln möchte, ist jede Bewertung aller User, ab einer bestimmten Bewertungsanzahl eines Users wichtig, besonders auch die schlechten Bewertungen.
 
 ## Welche anderen Features wären sinnvoll?
 
-Es gibt weitere zahlreiche Möglichkeiten den Datensatz mit unterschiedlichen Fragestellung zu untersuchen.Je nach den Interessen des Fragestellers. 
+Es gibt weitere zahlreiche Möglichkeiten den Datensatz mit unterschiedlichen Fragestellung auf starke Assoziation zu untersuchen, je nach den Interessen des Fragestellers. 
 
-So könnte man untersuchen wer in einem bestimmten Land was gut findet, und die unterschide zwischen den Ländern. So könnte man auf die Besonderheiten der regionalen Unterschiede eingehen und zum Beispiel eine Marketing- Strategie hieraus entwickeln.
+So könnte man untersuchen wer in einem bestimmten Land welche Autoren oder Titel gut findet. Man kann außerdem die Unterschiede zwischen den Ländern ermitteln. So könnte man auf die Besonderheiten der regionalen Unterschiede eingehen und zum Beispiel eine Marketing- Strategie hieraus entwickeln.
 
-Der Datensatz kann nach Alltersgruppe untersucht werden, welche Altersgruppe welche Bücher oder Autoren gut fand, und wer liest was. 
+Der Datensatz kann nach Alltersgruppe untersucht werden, bei welche Altersgruppe eine Assoziation zwischen welchen Büchern oder Autoren besteht. 
 
-Interessant wäre auch zu untersuchen, ob es eine Assoziation zwischen den Erscheinungszeiräumen. Ob User eher Bücher eines bestimmten Jahrzents  bewerten.
+Interessant wäre auch zu untersuchen, ob es eine Assoziation zwischen den Erscheinungszeiräumen und den Bewertungen der Uder gibt. Ob User eher Bücher eines bestimmten Jahrzents  bewerten, oder ob es da keinen ZUsammenhang gibt.
