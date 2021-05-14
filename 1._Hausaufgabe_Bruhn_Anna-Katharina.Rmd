@@ -1,0 +1,199 @@
+---
+title: "1. Hausaufgabe Bruhn, Anna-Katharina"
+output:
+  html_document:
+    df_print: paged
+  pdf_document: default
+---
+
+# 1. Hausaufgabe
+
+## Erstellen Sie ein Notebook, in dem Sie eine EDA anfertigen, um die folgenden Fragen zu beantworten:
+
+
+## • Welche Bücher sind am besten bewertet?
+
+Um diese Frage zu beantworten muss man zunächst die Datensätze "books" und book_ratings" verbinden, da in "ratings" nur die ISBN als Identifikator der Bücher dient. 
+
+Datensätze "books" und "ratings" importieren
+
+```{r}
+library(readr)
+books <- read_delim("BX-Books.csv", 
+    ";", escape_backslash = TRUE, escape_double = FALSE, 
+    trim_ws = TRUE)
+```
+```{r}
+library(readr)
+ratings <- read_delim("BX-Book-Ratings.csv", 
+    ";", escape_double = FALSE, trim_ws = TRUE)
+```
+## Library laden
+
+```{r}
+library(tidyverse)
+```
+
+Im Datensatz "books" reduziere ich die Spalten und verbinde diesen mit "ratings" zu "books_w_ratings".
+
+```{r}
+books_w_ratings <- books %>%
+  select(ISBN, `Book-Title`, `Book-Author`, `Year-Of-Publication`, Publisher) %>%
+  left_join(ratings)
+```
+```{r}
+View(books_w_ratings)
+```
+
+## Anzahl der Bewertungen der Bücher absteigend
+```{r}
+books_w_ratings %>%
+  group_by(`Book-Title`) %>%
+  summarise(anzahl_bewertungen = n()) %>%
+  arrange(desc(anzahl_bewertungen))
+```
+## Anzahl der Bewertungen 1-10, 0 und NA
+
+```{r}
+books_w_ratings %>%
+  group_by(`Book-Rating`) %>%
+  summarise(anzahl_bewertungen = n()) %>%
+  arrange(desc(anzahl_bewertungen))
+```
+In dem Data Frame kann man ablesen, dass 0, also keine Bewertung am häufigsten mit 647333 Bewertungen zutrifft, danach folgen 8 mit 91807 Bewertungen und 10 mit 71227 Bewertungen. 
+
+
+## Histogramm der Bewertung der Bücher
+
+```{r} 
+hist(books_w_ratings$`Book-Rating`)
+```
+In dem Histogram wird deutlich, dass die meisten Bewertungen den Wert 0 (keine Bewertung) haben. 
+
+
+```{r}
+summary(books_w_ratings)
+```
+Der Median der Bewertungen ist 0, da die größte Zahl der Bücher keine Bewertung haben. Das Mittel (Mean) liegt bei 2,8. Um die am besten bewertesten Bücher herauszufinden muss der Wert 0 (keine Bewertung) aus dem Datensatz entfernt werden.
+
+## Neuer Datensatz "books_w_ratings1" ohne 0 (keine Bewertung)
+```{r}
+books_w_ratings1 <- books_w_ratings %>%
+  filter(`Book-Rating` != 0)
+```
+
+```{r}
+View(books_w_ratings)
+```
+
+Im Datensatz "books_w_ratings1" wurden alle Bücher mit einer Bewertung 0 (keine Bewertung) entfernt, um nur die bewerteten Bücher untersuchen zu können.
+
+## Histogamm der Anzahl der Bewertungen 1-10 ohne 0 (keine Bewertung)
+
+```{r} 
+hist(books_w_ratings1$`Book-Rating`)
+```
+
+```{r}
+summary(books_w_ratings1)
+```
+Der Median der Bewertungen liegt bei 8,0 und der Mean bei 7,63. Da der Median bei 8 liegt, werde ich nur die Anzahl der Bücher mit 8 oder höher untersuchen.
+
+
+## Die Bewertungen geordnet nach der Anzahl der Bewertungen
+
+```{r}
+books_w_ratings1 %>%
+  group_by(`Book-Rating`, `Book-Title`) %>%
+  summarise(anzahl_bewertungen = n()) %>%
+  filter(`Book-Rating` >= 8) %>%
+  arrange(desc(anzahl_bewertungen))
+```
+Dargestellt werden alle Bücher mit Bewertungen von 8-10 geordnet nach der Anzahl der Bewertung."The Lovely Bone: A Novel" hat mit 188 und 179 die meisten Bewertungen, aber ist jeweils nur mit einer 8, bzw. einer 9 bewertet worden. "Der"The Da Vinci Code" hat nicht ganz so viele Bewertungen (160), aber ist mit 10 bewertet worden. 
+Da zwischen den Bewertungen von "The Lovely Bone: A Novel" und "The Da Vinci Code" nur 19, bzw. 20 Bewertungen liegen, aber "The Da Vinci Code" mit 10 bewertet wurde, wird nun, nur die Anzahl der Bewertung mit einer 10 untersucht.
+
+```{r}
+books_w_ratings1 %>%
+  group_by(`Book-Title`, `Book-Rating`) %>%
+  summarise(anzahl_bewertungen = n()) %>%
+  filter(`Book-Rating` >= 10) %>%
+  arrange(desc(anzahl_bewertungen))
+```
+Dargestellt werden alle Bücher mit einer Bewertungen von 10 geordnet nach der Anzahl der Bewertung."The Da Vinci Code" hat die meisten besten Bewertungen (160 Bewertungen), gefolgt von "Harry Potter and the Sorcerer's Stone"  (152 Bewertungen) und "Harry Potter and the Prisoner" (150 Bewertungen).
+
+Geht man bei der Frage, nach dem am besten bewerteten Buch, nach der Anzahl der Bewertungen mit 10, also der höchsten Bewertung, dann ist das am besten bewertete Buch "The Da Vinci Code".
+
+
+## • Sollte die Anzahl der Bewertungen auch mit reinspielen? 
+
+Ja, da sonst die Aussage einer Bewertung verzerrt wird. Wenn Titel mit nur einer sehr guten Bewertung genauso gewertet werden, wie Bücher mit 100 unterschiedlich ausfallenden Bewertungen, sind diese Aussagen nicht vergleichbar. Daher muss man eine Untergrenze der minimalen Anzahl von Bewertungen festlegen, um Bücher anhand der Bewertungen miteinander vergleichen zu können.
+
+Die beste Durchschnittsbewertung von einem Buch sollte ein noch aussagekräftiger Indikator für die Frage nach dem am besten bewerteten Buch sein, als nur nach der Anzahl der Bewertung mit der höchsten Bewertung (10) zu urteilen, da der individuelle Maßstab zum Bewerten von Büchern bei Menschen nicht gleich ist. 
+Man sollte eine minimale Anzahl von Bewertungen für die Duchschnittsbewertung festlegen, da nur eine oder zwei 10er Bewertungen auch hier die Aussage verzerren können.
+
+```{r}
+books_w_ratings1 %>%
+  group_by(`Book-Title`) %>%
+  summarize(durchschnittsbewertung = mean(`Book-Rating`), medianbewertung = median(`Book-Rating`))
+```
+Die Titel sind mit der Durchschnittbewertung und Medianbewertung aufgelistet, wobei diese noch nicht geordnet sind und die Durchschnittsbewertungen, mit einer zu geringen Anzahl an Bewertung, noch nicht entfernt worden sind. 
+
+## Die Durchschnittsbewertung absteigend geordnet
+```{r}
+books_w_ratings1 %>%
+  group_by(`Book-Title`) %>%
+  summarize(durchschnittsbewertung = mean(`Book-Rating`), anzahl_bewertungen = n ()) %>%
+  filter(anzahl_bewertungen >= 100) %>%
+  arrange(desc(durchschnittsbewertung))
+```
+Die Durchschnittsbewertung sind absteigend geordnet und nur der Durchschnitt mit 100 oder mehr Bewertungen sind aufgeführt. Der Titel mit der besten Durchschnittsbewertung von 9.330882 ist "The Two Towers (The Lord of the Rings, Part 2)" mit 136 Bewertungen, aber "Harry Potter and the Sorcerer's Stone" hat zwar eine etwas geringeren Duchschnittsbewertung mit 8.936508	aber 315 Bewertungen, also mehr als doppelt so viele Bewertungen wie "The Two Towers". Gleiches gilt auch für "The Da Vinci Code" Durchschnittsbewertung von 8.439271	und 494 Bewertungen. Ähnliches Trift auch auf andere Titel zu. 
+Die Frage ist nun welches Kriterium Aussagekräftiger ist bei der Frage nach dem besten Buch, der Bewertungsdurchschnitt oder die Anzahl der Bewertungen, je nach dem kommt man zu unterschiedlichen Ergebnissen.
+
+
+## • Welche Autoren sind am besten bewertet?
+
+```{r}
+books_w_ratings1 %>%
+  group_by(`Book-Author`, `Book-Rating`) %>%
+  summarise(anzahl_bewertungen = n()) %>%
+  filter(`Book-Rating` >= 8) %>%
+  arrange(desc(anzahl_bewertungen))
+```
+Stephen King ist der Autor mit den meisten (1051) Bewertungen mit 10, J. K. Rowling folgt mit 885	Bewertungen.
+
+## Autor:innen mit den besten Durschnittsbewertungen absteigend geordnet
+```{r}
+books_w_ratings1 %>%
+  group_by(`Book-Author`) %>%
+  summarize(durchschnittsbewertung = mean(`Book-Rating`), anzahl_bewertungen = n ()) %>%
+  filter(anzahl_bewertungen >= 100) %>%
+  arrange(desc(durchschnittsbewertung))
+```
+Das Data Frame zeigt, die Durchschnittsbewertungen der Autoren absteigend, aber noch ohne die Anzahl der Bewertungen zu berücksichtigen. J. K. Rowling hat mit 1746 die meisten Bewertungen, aber nicht die beste Durchschnittsbewertung (8.970218). Die Beste Durchschnittsbewertung mit 9.186186	hat Bill Watterson, aber nur 333 Bewertungen, da der Durchschnitt nah beieinander liegt aber da J. K. Rowling fast sechs mal so viele Bewertungen hat ist sie besser Bertet worden als Bill Watterson.
+
+J. K. Rowling ist die Autorin mit der besten Durchschnittsbewertung.
+
+## • Welcher Verlag hat die besten Bücher?
+
+```{r}
+books_w_ratings1 %>%
+  group_by(`Publisher`, `Book-Rating`) %>%
+  summarise(anzahl_bewertungen = n()) %>%
+  filter(`Book-Rating` >= 8) %>%
+  arrange(desc(anzahl_bewertungen))
+```
+Der Verlag mit der besten Bewertung (10) und den meisten Bewertungen (2102) ist Ballantine Books, gefolgt von Pocket 1828	Bewertungen und Bantam mit 1442	Bewertungen.
+
+## Verlage mit den besten Durschnittsbewertungen absteigend geordnet
+
+```{r}
+books_w_ratings1 %>%
+  group_by(`Publisher`) %>%
+  summarize(durchschnittsbewertung = mean(`Book-Rating`), anzahl_bewertungen = n ()) %>%
+  filter(anzahl_bewertungen >= 100) %>%
+  arrange(desc(durchschnittsbewertung))
+```
+Die Verlage mit sehr vielen Bewertungen und sehr guten Durchschnittsbewertungen sind Andrews McMeel Publishing (Durchschnittsbewertung 8.542254	und 1420	Bewertungen), Del Rey (Durchschnittsbewertung 8.438819	und 1422	Bewertungen) und HarperTrophy (Durchschnittsbewertung 8.167849	und 2115	Bewertungen).
+Der verlag mit der besten Durchschnittsbewertung von 8.908284 ist Arthur A. Levine Books, aber im Gegensatz zu den oben genannten Verlagen hat er mit 338 Bewertungen nur einen Bruchteil der Bewertungen. 
+
+Der am besten bewerteste Verlag ist also Andrews McMeel Publishing.

@@ -1,0 +1,251 @@
+---
+title: "Hausaufgaben Session 2 Bruhn, Anna-Katharina"
+output:
+  html_document:
+    df_print: paged
+---
+
+# •Gibt es eine Korrelation zwischen Anzahl Bücher pro Publisher und Anzahl Ratings, die die Bücher eines Publishers erhalten? (hier müssen Sie wieder etwas Data Wrangling betreiben)
+
+Datensätze "books" und "ratings" importieren
+
+```{r}
+library(readr)
+books <- read_delim("BX-Books.csv", 
+    ";", escape_backslash = TRUE, escape_double = FALSE, 
+    trim_ws = TRUE)
+View(books)
+```
+
+```{r}
+library(readr)
+book_ratings <- read_delim("BX-Book-Ratings.csv", 
+    ";", escape_double = FALSE, trim_ws = TRUE)
+View(book_ratings)
+```
+
+Library laden
+
+```{r}
+library(tidyverse)
+```
+
+# Datensätze säubern
+
+```{r}
+book_ratings$`Book-Rating`[book_ratings$`Book-Rating` == 0] <- NA
+```
+
+```{r}
+books$`Year-Of-Publication`[books$`Year-Of-Publication` == 0] <- NA
+```
+
+Alle Einträge mit der Angabe 0 bei dem Erscheinungsjahr ersetze ich mit NA, da 0 mit großer Wahrscheinlichkeit keine zutreffende Angabe ist.
+
+```{r}
+books$`Year-Of-Publication`[books$`Year-Of-Publication` >= 2013] <- NA
+```
+
+Ich ersetze alles ab 2013 (es gibt eine Lücke zwischen 2012 und 2020) mit NA. Die Einträge ab 2020 stimmen höchstwahrscheinlich nicht mit dem tatsächlichen Publikationsjahr überein und daher ersetze ich hier das Jahr mit NA.
+
+
+```{r}
+books1 <- books %>%
+  mutate(`Book-Author` = str_to_lower(`Book-Author`)) %>%
+  mutate(`Book-Title` = str_to_lower(`Book-Title`)) %>%
+  mutate(Publisher = str_to_lower(Publisher)) %>%
+  mutate(`Book-Author` = str_replace(`Book-Author`,"ç","c")) %>%
+  mutate(`Book-Title` = str_replace(`Book-Title`,"ç","c")) %>%
+  mutate(`Publisher` = str_replace(`Publisher`,"ç","c")) %>%
+  mutate(`Book-Author` = str_replace(`Book-Author`,"ñ","n")) %>%
+  mutate(`Book-Title` = str_replace(`Book-Title`,"ñ","n")) %>%
+  mutate(`Publisher` = str_replace(`Publisher`,"ñ","n")) %>%
+  mutate(`Book-Author` = str_replace(`Book-Author`,"è","e")) %>%
+  mutate(`Book-Title` = str_replace(`Book-Title`,"è","e")) %>%
+  mutate(`Publisher` = str_replace(`Publisher`,"è","e")) %>%
+  mutate(`Book-Author` = str_replace(`Book-Author`,"é","e")) %>%
+  mutate(`Book-Title` = str_replace(`Book-Title`,"é","e")) %>%
+  mutate(`Publisher` = str_replace(`Publisher`,"é","e")) %>%
+  mutate(`Book-Author` = str_replace(`Book-Author`,"ê","e")) %>%
+  mutate(`Book-Title` = str_replace(`Book-Title`,"ê","e")) %>%
+  mutate(`Publisher` = str_replace(`Publisher`,"ê","e")) %>%
+   mutate(`Book-Author` = str_replace(`Book-Author`,"ô","o")) %>%
+  mutate(`Book-Title` = str_replace(`Book-Title`,"ô","o")) %>%
+  mutate(`Publisher` = str_replace(`Publisher`,"ô","o")) %>% 
+   mutate(`Book-Author` = str_replace(`Book-Author`,"à","a")) %>%
+  mutate(`Book-Title` = str_replace(`Book-Title`,"à","a")) %>%
+  mutate(`Publisher` = str_replace(`Publisher`,"à","a")) 
+```
+Die Umlaute ä, ö, ü habe ich nicht angepasst, da mir aufgefallen ist, dass hiermit immer nur der erste Umlaut in einer Zeile angepasst wird und nicht jeder in der Zeile. 
+Außerdem ist es sehr unwarscheinlich das die User, die Einträge vorgenommen haben statt der Umlaute eine Umschreibung verwendet haben.
+
+
+Im Datensatz "books" reduziere ich die Spalten und verbinde diesen mit "ratings" zu "books_w_ratings".
+
+```{r}
+books_w_ratings <- books1 %>%
+  select(ISBN, `Book-Title`, `Book-Author`, `Year-Of-Publication`, Publisher) %>%
+  left_join(book_ratings)
+```
+# Gibt es eine Korrelation zwischen Anzahl Bücher pro Publisher und Anzahl Ratings, die die Bücher eines Publishers erhalten?
+
+
+```{r}
+(ratings_vs_books <- books_w_ratings %>%
+  filter(`Book-Rating`>0) %>%
+  group_by(Publisher) %>%
+  mutate(number_of_ratings = n()) %>%
+  select(Publisher,`Book-Title`,number_of_ratings) %>%
+  unique() %>%
+  mutate(number_of_books = n()) %>%
+  ungroup() %>%
+  select(number_of_books,number_of_ratings))
+```
+Es werden neue Variablen "number_of_ratings" und "number_of_books" erstellt und die Bücher ohne Bewertung herausgefiltert.
+
+```{r}
+summary(ratings_vs_books)
+```
+```{r}
+sd(ratings_vs_books$number_of_books)
+```
+```{r}
+sd(ratings_vs_books$number_of_ratings)
+```
+Da der Mittelwert und die Staandartabweichungen bei "number_of_ratings" so unterschiedlich sind, erstelle ich ein Histogram.
+
+```{r}
+hist(ratings_vs_books$number_of_ratings)
+```
+```{r}
+boxplot(ratings_vs_books$number_of_ratings)
+```
+
+Im Boxplot wird deutlich, dass es bei der Variable "number_of_ratings" jenseits des oberen Whisker einige Ausreißer gibt, die dazu führen, das die Standartabweichung und der Mittelwert so unterschiedlich sind.
+
+
+## Korrelieren die beiden Variablen?
+
+```{r}
+plot(ratings_vs_books)
+```
+
+```{r}
+cor.test(ratings_vs_books$number_of_books,ratings_vs_books$number_of_ratings)
+```
+Die Anzahl Bücher pro Publisher (number_of_books) und die Anzahl Ratings, die die Bücher eines Publishers erhalten (number_of_ratings), korrelieren stark (p < 0.849395), da bei gleich oder größer als 0.8 eine starke Korrelation zwischen den Variablen besteht. 
+
+Man kann also davon ausgehen, dass je mehr Bücher ein Publisher hat auch die Anzahl der Ratings der Bücher eines Publishers steigen. 
+
+Da zwischen den Variablen "number_of_books" und "number_of_ratings" eine starke Korrelation besteht und es einen linearen Zusammenhang gibt, kann man eine sinnvolle lineare Regression durchführen. 
+
+
+
+# •Haben ältere Bücher mehr Ratings, weil sie mehr Zeit haben, um Ratings zu sammeln?
+
+```{r}
+books_w_ratings %>%
+  group_by(`Year-Of-Publication`) %>%
+  summarise(number_of_ratings = n()) %>%
+  arrange(desc(number_of_ratings))
+```
+```{r}
+ratings_vs_age_of_books <- books_w_ratings %>%
+  group_by(`Year-Of-Publication`) %>%
+  mutate(number_of_ratings = n()) %>%
+  select(`Year-Of-Publication`,`Book-Title`,number_of_ratings) %>%
+  unique()
+```
+
+```{r}
+plot(ratings_vs_age_of_books$`Year-Of-Publication`, ratings_vs_age_of_books$number_of_ratings)
+```
+
+Da in dem Plot deutlich wird, dass vor 1900 sehr wenige Bücher erschienen sind, die von den Usern bewertet wurden, werde ich alle Bücher vor 1900 herausfiltern (Im übernächsten Plot).
+
+
+Zunächst untersuche ich die Bücher 1970-2013 näher.
+
+```{r}
+ratings_vs_age_of_books1 <- ratings_vs_age_of_books %>%
+  filter(`Year-Of-Publication`>= 1970)
+```
+
+```{r}
+plot(ratings_vs_age_of_books1$`Year-Of-Publication`, ratings_vs_age_of_books1$number_of_ratings)
+```
+Bei dem Auschnitt des Histograms 1950-2013, kann man erkennen, dass der Datensatz, (2004 erstellt)ab 2004 die ratings pro Buch viel weniger werden, dh. kann man daraus schließen, dass diese Angaben über das Erscheinungsjahr wahrscheinlich nicht zutreffen, da die Bewertungen für, zu diesem Zeitpunkt in der Zukunft liegende Bücher erstellt worden wären. Ich filtere also alle Werte nach 2004 heraus.
+
+```{r}
+ratings_vs_age_of_books <- ratings_vs_age_of_books %>%
+  filter(`Year-Of-Publication`<= 2004, `Year-Of-Publication`>= 1900)
+```
+
+```{r}
+plot(ratings_vs_age_of_books$`Year-Of-Publication`, ratings_vs_age_of_books$number_of_ratings)
+```
+Bei diesem Streudiagram erkennt man ein exponentielles Wachstum der number_of_ratings ab ca. 1980. Dies lässt sich mit der Erfindung und der vermehrten Nutzung des Interets, Ende des 20. Jh., erklären. Erst zu diesem Zeitpunkt können User die Bücher bei Erscheinen bewerten, diesen Vorsprung können die früher erschienenen Werke nicht nachträglich aufholen. 
+Je später ein Titel erschienen ist desto mehr Ratings hat es, wobei diese Kurve nicht linear verläuft, sondern exponentiell ansteigt.
+
+Die Nutzung des Internets hat seit den 1990er Jahren auch rasant zugenommen, somit auch die Ratings der User.
+
+## Lineare Regression möglich?
+
+```{r}
+ hist(ratings_vs_age_of_books$`Year-Of-Publication`)
+```
+
+```{r}
+ hist(ratings_vs_age_of_books$number_of_ratings)
+```
+
+Bei der Frage nach der Korrelation zwischen älteren Büchern (Year-Of-Publication) und Anzahl der Ratings (number_of_ratings)besteht kein linearer Zusammenhang. Sie korrelieren nicht linear.
+
+Die Histograme der Variablen "Year-Of-Publication" und "number_of_ratings" sind nicht normalalverteilt und im Streudiagram ist kein linearer Zusammenhang zu erkennen, die Kurve wächst exponentiell.
+
+Daher kann man die Pearson-Korrelation nicht anwenden, da die Vorraussetzungen für diese nicht erfüllt sind.
+
+
+
+# •Kann man mit einer linearen Regression etwas davon vorhersagen?
+
+```{r}
+fit <- lm(ratings_vs_books$number_of_books ~ ratings_vs_books$number_of_ratings)
+plot(ratings_vs_books)
+abline(fit)
+```
+Es besteht ein linearer Zusammenhang zwischen den Variablen, aber es gibt extreme Ausreißer(siehe Boxplot). 
+
+Man kann mit einer linearen Regression eine abhängige Variable durch eine oder auch mehrere unabhängige Variablen erklären und vorhersagen. Hier ist die abhängige Variabel "number_of_ratings" pro Publisher und die unabhängige Variabel ist "number_of_books". Man kann also vorhersagen in welchem Wertebereich weitere Werte liegen werden.
+Für höre x-Werte erhöht sich die Abweichung von der Regressionsgeraden. 
+
+## Variablen Vertauscht! Korrektur 2.5.21
+
+```{r}
+fit <- lm(ratings_vs_books$number_of_ratings ~ ratings_vs_books$number_of_books)
+plot(ratings_vs_books)
+abline(fit)
+```
+
+
+Die Residuen sollten einigermaßen verteilt sein, dass sind sie in dem Streudiagram nicht.
+```{r}
+summary(fit)
+```
+Mit 76% Wahrscheinlichkeit kann hier die Varianz durch die unabhänigen Variabel "number_of_books" erklärt werden (R-squared:  0.7598).
+
+## Linearer Zusammenhang zwischen "Year-Of-Publication" und "number_of_ratings"?
+
+```{r}
+ratings_vs_age_of_books3 <- ratings_vs_age_of_books %>%
+  select(`Year-Of-Publication`, number_of_ratings)
+```
+
+
+```{r}
+fit <- lm(ratings_vs_age_of_books3$`Year-Of-Publication` ~ ratings_vs_age_of_books3$number_of_ratings)
+plot(ratings_vs_age_of_books3)
+abline(fit)
+```
+In diesem Streudiagram gibt es keinen linearen ZUsammenhang der Variablen, daher kann hier mit der linearen Regression nichts vorhergesagt werden.
+
