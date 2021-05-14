@@ -1,0 +1,261 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+# 4. Hausaufgabe Bruhn, Anna-Katharina
+
+Library laden
+
+```{r}
+library(tidyverse)
+library(e1071)
+library(caret)
+library(pROC)
+```
+
+```{r}
+library(readr)
+titanic <- read_delim("titanic.csv", ";", 
+    escape_double = FALSE, trim_ws = TRUE)
+```
+# Class Imbalance Check
+
+```{r}
+titanic %>%
+  group_by(`survived`) %>%
+  summarise(anzahl_überlebten = n())
+```
+Da die Verteilung von Überlebenden und Toten nicht gleich verteilt ist, aber auch nicht extrem einseitig verteilt ist, gibt es keine Class Imbalance und man kann mit den Daten so weiterarbeiten. 
+
+# •Bitte erstellen Sie ein Notebook mit weiteren Features (Alter, Geschlecht und Klasse sind als Beispiel in meinem Notebook auf GitHub)
+
+
+## Algorithmus 1: Support Vector Machines
+
+```{r}
+(titanic.df <- titanic %>%
+  select(survived,pclass,sex,age,sibsp,parch) %>%
+   mutate(survived = as.factor(survived)))
+```
+Es wird ein Dataframe mit fünf Features "sex", "pclass", "age", "sibsp" (Anzahl der Geschwister oder Partner die mit auf der Titanic waren), "parch" (Anzahl der Eltern oder Kinder die mit an Bord waren) und dem Class Label "survived" erstellt. 
+Der Datentyp von "survived", der Zielvariablen wird zum Factor umgewandelt, da das Überleben eine kategoriale Variabel ist und keine metrische Variabel.
+
+```{r}
+titanic.df <- titanic.df %>%
+  mutate(age = as.numeric(str_replace(age,",",".")))
+```
+
+Da "age" aufgrund einer Dezimalzahl, nicht als numeric erkannt wurde, wird dies angepasst, da sonst der SVM-Algo. nicht angewendet werden kann, da er numerische Daten braucht um Distanzen ziehen zu können.
+
+```{r}
+titanic.df <- na.omit(titanic.df)
+```
+
+Die NAs werden entfernt, diese würden dazu führen, dass keine Ergebnisse generiert werden können. 
+
+
+```{r}
+titanic.df <- titanic.df %>%
+  mutate(sex = ifelse(sex == "female", 1, 0))
+```
+
+Die Merkmalsausprägungen "female" und "male" werden durch "1" und "0" ersetzt und so in numerische Daten konvertiert. Es werden Dummy Data erstellt.
+
+
+```{r}
+set.seed(393)
+inTrain <- createDataPartition(
+  y = titanic.df$survived,
+  p = .8,
+  list = FALSE)
+training <- titanic.df[ inTrain,]
+testing  <- titanic.df[-inTrain,]
+```
+
+Erstellen einer Datenpartition und aus der, wird das Trainings- und das Test-Set erstellt.
+
+Nun werden die Trainigsdaten mit der Zielvariabelen "survived" mit zuhilfe nahme eines linearen svm-Modell trainiert. Das, in ein Objekt geschriebenes Modell kann nun als ZUsammenfassung angezeigt werden.
+
+```{r}
+model.svm <- svm(formula = survived ~ ., data = training, probability=TRUE)
+summary(model.svm)
+pred <- predict(model.svm, testing[,-1], probability = TRUE)
+```
+
+```{r}
+(test.results <- cbind(pred, testing))
+```
+Die Ergebnisse der Prediction kann nun mit den tasächlichen Daten, wer überlebt hat, verglichen werden. Man sieht einige Abweichungen.
+
+```{r}
+head(attr(pred, "probabilities"))
+```
+
+```{r}
+confusionMatrix(pred,testing$survived)
+```
+
+Oben wird in der Confusion Matrix angezeigt wie oft im Test-Set die Prediction richtig und falsch lag wer überlebt hat. Bei 23 gestorbenen Menschen von 139 Toten hat der Algo. ein Überleben vorhergesagt, dies ist also ein Typ I Error (false positive). Bei den 69 Menschen die nicht gestorben sind, wurde bei 7 Menschen kein Überleben vorhergesagt. Also ein Typ II Error (false negative).
+
+```{r}
+library(pROC)
+pROC_obj <- roc(as.numeric(test.results$survived), as.numeric(test.results$pred),
+            smoothed = TRUE,
+            ci=TRUE, ci.alpha=0.9, stratified=FALSE,
+            plot=TRUE, auc.polygon=TRUE, max.auc.polygon=TRUE, grid=TRUE,
+            print.auc=TRUE, show.thres=TRUE)
+```
+Die ROC AUC zeigt die Preformance des Modells. Ein Wert von 0.836 ist gut, und zeigt, dass die Prediction wesentlich besser als der Zufall ist.
+
+## Algo 2: Naive Bayes
+
+Die, in Algo. 1 gebildeten Partition und den daraus generierten Test- und Trainigsdatensäten wird hier wieder verwendet und ein neuer Datensatz "my_training" und my_testing erstellt. Aber die Zielvariabel und die fünf Features müssen in kategoriale Daten umgewandelt werden, da Naive Bayes (NB) damit sonst nicht arbeiten kann.
+Bei dem Feature "age" werden alle Personen unter 14 als Kinder definiert und alle Personen über 14 als Erwachsene, anschließend wird mit den Daten ein Modell erstellt.
+
+```{r}
+my_training <- training %>%
+  mutate(survived = as.factor(survived))%>%
+  mutate(sex = as.factor(sex))%>%
+  mutate(pclass = as.factor(pclass)) %>%
+  mutate(sibsp = as.factor(sibsp)) %>%
+  mutate(parch = as.factor(parch)) %>%
+mutate(age = as.factor(ifelse(age < 14, "child", "adult")))
+model <- naiveBayes(survived ~ ., data = my_training)
+model
+```
+
+In dem Modell oben wird die Wahrscheinlichkeit der Passagiere zu Überleben anhand der einzelnen Variablen unabhänig voneinander angezeigt.
+
+NUn werden die Wahrscheinlichkeiten der Variablen kombiniert und getestet. Es wird eine Confusion Matrix erstellt, die verdeutlichen soll, wie gut die Prediction ist und wie viele false positive und false negative dabei waren.
+
+
+```{r}
+my_testing <- testing %>%
+  mutate(sex = as.factor(sex)) %>%
+  mutate(pclass = as.factor(pclass))%>%
+  mutate(sibsp = as.factor(sibsp)) %>%
+  mutate(parch = as.factor(parch)) %>%
+  mutate(age = as.factor(ifelse(age < 14, "child", "adult")))
+pred <- predict(model, my_testing)
+table(pred, my_testing$survived)
+```
+Hier wird in der Confusion Matrix angezeigt wie oft im Test-Set die Prediction richtig und falsch lag wer überlebt hat. Bei 24 Menschen von 133 Toten hat der Algo. ein Überleben vorhergesagt, dies ist also ein Typ I Error (false positive). Bei den 75 Menschen die nicht gestorben sind, wurde bei 14 Menschen kein Überleben vorhergesagt. Also ein Typ II Error (false negative).
+
+```{r}
+(test.results <- cbind(pred, my_testing))
+```
+
+Diese Tabelle zeigt die Prediction mit den realen Daten und verdeutlicht, wo das Modell das Überleben richtig vorhergesagt hat und wo nicht.
+
+```{r}
+test.results <- test.results %>%
+  mutate(pred = as.numeric(pred))
+pROC_obj <- roc(as.numeric(as.factor(test.results$survived)), test.results$pred,
+            smoothed = TRUE,
+            ci=TRUE, ci.alpha=0.9, stratified=FALSE,
+            plot=TRUE, auc.polygon=TRUE, max.auc.polygon=TRUE, grid=TRUE,
+            print.auc=TRUE, show.thres=TRUE)
+
+```
+Die ROC AUC zeigt die Preformance des Modells. Ein Wert von 0.802 ist gut, und zeigt, dass die Prediction wesentlich besser als der Zufall ist.
+
+## Algo. 3: Decision Tree
+
+Die in Algo. 1 erstellte Partition und die daraus erstellte Test- und Trainigsdatensäze werden auch hier wieder verwendet und hiermit ein Decision Tree erstellt. Der Algo. trennt die Daten nach der größten Trennungsmöglichkeit der Variablen nacheinander. 
+
+```{r}
+library(rpart)
+library(rpart.plot)
+tree<- rpart(survived~., data = training, method = 'class')
+rpart.plot(tree)
+```
+
+In dem Decision Tree wird deutlich, dass der größte Faktor für das Überleben das Geschlecht war. Er erstellt, nach der Unterscheidung im Geschlecht zwei Bäume, die unabhängig voneinander, das Überleben von Männer und Frauen in kombination mit den anderen Variablen zeigt. 
+Also hatte die größte Wahrscheinlichkeit zu überleben eine Frau in der 1. Klasse, die älter als 9.5 Jahre alt ist.
+
+Bei den Männern, die von vornerein eine geringere Wahrscheinlichkeit hatten zu überleben, haben Männer der 1. und 2. Klasse und die 3 Geschwister oder Partner (Angehörige) haben, die größte Wahrscheinlichkeit zu überleben. 
+
+Es wird deutlich das die Features "sex" und "pclass" den größten Einfluss auf das Überleben der Passagiere an Bord der Titanic hatten. Die anderen Variablen sind nicht in der Deutlichkeit für das Überleben verantwortlich gewesen.
+
+```{r}
+dt_results <- predict(tree, testing[,-1], type = 'prob')
+head(model.results.dt <- cbind(testing,dt_results),500)
+```
+Hier werden die Predictions des DT-Algo. als Wahrscheinlichkeiten neben die tatsächlichen Daten gestellt und so verglichen in welchen Fällen das Modell das Falsche vorhergesagt hat.
+
+```{r}
+test.results2 <- test.results %>%
+  mutate(pred = ifelse(pred>=0.5,1,0))
+table(test.results2$pred, testing$survived)
+```
+In der Confusion Matrix wird nur die angezeigt Prediction für das Überleben angezeigt, nicht für die Toten, daher kann man nur sagen, dass das Modell in 85 Fällen richtig lag und 123 Falsch.
+
+```{r}
+pROC_obj <- roc(model.results.dt$survived,model.results.dt$`1`,
+            smoothed = TRUE,
+            # arguments for ci
+            ci=TRUE, ci.alpha=0.9, stratified=FALSE,
+            # arguments for plot
+            plot=TRUE, auc.polygon=TRUE, max.auc.polygon=TRUE, grid=TRUE,
+            print.auc=TRUE, show.thres=TRUE)
+```
+Die ROC AUC zeigt die Preformance des Modells. Ein Wert von 0.870 ist gut, und zeigt, dass die Prediction wesentlich besser als der Zufall ist.
+
+
+## •Was sind die Unterschiede in der Performance der Algorithmen?
+
+Die Preformance von Modellen kann man anhand der ROC AUC messen.
+Die Modelle werden Anhand der Test- und der Trainigsdaten trainiert und getestet.
+ 
+Der Test ist, mit einer ausreichend großen Datenmenge und guter Datenqualität ein guter Indikator für die Wirksamkeit des Modells zur Prediction von Zielvariablen. Allerdings sollten Modelle auch nicht zu sehr an Test und Trainigsdaten angepasst worden sein, da sonst die Gefahr des Overfittings besteht und das Modell nur mit den Test- und Trainigsdaten sehr gut arbeiten kann, aber mit den späteren Daten keine guten Ergebnisse mehr liefert, es also überangepasst ist.
+
+In Aufgabe 1 wurden die drei Algorithmen: Support Vector Machines, Naive Bayes und Decision Tree auf den erstellten Datensatz mit fünf Variablen angewendet, um für die einzelen Passagiere der Titanic die Zielvariabel "survived" vorherzusagen. 
+
+Dies kann man natürlich schlecht auf zukünftige Schiffsunglücke anwenden, da die Gründe für ein Überleben oder Sterben bei diesem Unglück ziemlich speziell waren und es zum Glück so einen Unfall eher nicht wieder geben wird, aber um die Funktionsweise der Algorithmen zu verdeutlichen eignet er sich gut. 
+
+Die fünf Variablen, anhand der die Zielvariablen "survived" predicted wird sind: "sex", "pclass", "age", "sibsp" (Anzahl der Geschwister oder Partner die mit auf der Titanic waren), "parch" (Anzahl der Eltern oder Kinder die mit an Bord waren). Es wird mithilfe der Algorithmen ein Modell erstellt, die für die Passagiere der Titanic anhand der Features ein Überleben vorhersagen und der ACU zeigt an wie gut das Modell preformed. 
+
+Algorithmus 1: Support Vector Machines
+
+Bei dem 1. Algorithmus Support Vector Machines, werden die Abstände der Support Vektoren gemessen und in einem Modell umgesetzt um die Prediction für die Zielvariabel zu bestimmen, der Algo. ist dadurch auch schneller in der Berechnung. 
+Da er mit den Distanzen der Support Vektoren arbeitet braucht er auch mehr Daten aber der Algo. kann auch mit vielen Variablen umgehen.
+Der SVM-Algo. braucht für sein Modell  numerische Daten, es müssen nicht-numerische Variablen mit Dummy Data angepasst werden. 
+
+Mit der ROC AUC kann die Preformance gemessen werden. Der SVM-Algo hat eine AUC von 0,836. Also eine gute Preformance, da alles ab 0,8 gut ist und wesentlich besser als der ZUfall. 
+
+In der ROC AUC wird deutlich, dass die Sesitivity (y-Achse) recht steil bis ca. 0,74 steigt, also bis dahin die false negative Fälle zu sehen sind und dann abknickt. Die Specificity (x-Achse) steigt etwas flacher als die Sensivity bis ca. 0,94 und zeigt in welchem Maße die false positive Fälle ins Gewicht fallen.
+Es werden also mehr false positive Fälle bei der Prediction vorkommen als false negative. Es wird also bei mehr Menschen ein Überleben vorhergesagt werden, die eigentlich tod sind, als bei Toten ein Überleben. 
+
+Algorithmus 2: Naive Bayes
+
+Beim 2. Algorithmus, dem Naive Bayes (NB) werden keine Distanzen berechnet, er kann nur mit kategorialen Daten umgehen. Der Algo. kann also keine Auskunft über Abstände geben.
+Der NB passt das Modell den Daten an, er lernt also mit jedern Daten dazu, und kann so seine Preformance verbessern. Er kann daher nicht an Overfitting leiden.
+Der Algo. kann auch gut mit kleinen Datenmengen arbeiten.
+
+Die Prefomance des Naive Bayes anhand der ROC AUC liegt bei 0.802 und ist gut. Die Sesitivity steigt nicht ganz so steil wie im SVM-Algo. aber trotzdem recht steil bis sie bei ca. 0,71 abknickt und die Specificity steigt etwas steiler als im 1. Algo. bis ca. 0,9. Die Fehler Verteilung auf Typ I und II ist also ein wenig ausgeglichener als im ersten Algo.
+
+Algorithmus 3: Decision Tree
+
+Der Decision Tree gewichtet und teilt die Variablen automatisch in Bäume, beginnend mit der Variabel mit den höchsten Unterschieden in der Wahrscheinlichkeit.
+Der Algo. hat ohne große Optimierung eine gute Prediction, aber diese wird auch nicht besser duch das Optimieren. Die Prefomance ist also nicht optimierbar. 
+Der Algo. leidet auch schnell an Overfitting. Allerdings ist er in seiner Darstellung Transparent für den Nutzer.
+
+Der Decision Tree hat eine AUC von 0.870. Also die beste der drei Algorithmen. Er hat auch, anders als die anderen Algorithmen mehrere Knicks in der AUC, kann daher der idealen Kurve näher kommen.
+Die sensitivity steigt extrem steil bis ca. 0,65 an und knickt dann in mehreren knicks ab. Die Specificity steigt recht steil, mit einem kleinen Knick bis ca. 0,88 an. 
+Die Fehler-Verteilung auf Typ I und II ist nicht recht ausgeglichen, da wenig false negative Fälle auftreten werden, aber mehr false positive, ähnlich wie im 1. Algo.
+
+## •Finden Sie Erklärungen dafür.
+
+Der Decision Tree hat den besten AUC Wert,also die Prefomance, da aber dieser Algorithmus nicht weiter optimiert werden kann, hat er seine optimale Prediction erreicht. Auch würde der Algo. schnell an Overfittiung leiden und könnte daher schlecht für andere, als den Trainigsdatensatz verwendet werden können. 
+Er hat hier eine so gute Preformance, da einige der Variablen einen entscheidenen Einfluss auf das Überleben der Passagiere hatte, nähmlich das Geschlecht und die Klasse. Er kann also klare Wahrscheinlichkeiten berechnen und danach trennen. Dies ist ein Grund für die gute Preformance des Decision Trees.
+
+Der SVM-Algo. kann optimiert werden. Er kann auch unter Overviffing leiden. Der SVM-Algo. hat hier eine gute Preformance, die noch verbessert werden könnte. 
+Der SVM-Algo. ist bei diesem Datensatz mit fünf Variablen gut geeignet, da er mit vielen Variablen arbeiten kann.
+Da er aber andererseits etwas mehr Daten benötigt, da nur die Support Vektoren in die Berechnung einfließen, könnte er bei 1310 Merkmalsträger jedoch noch mit recht wenig Daten arbeiten müssen.
+
+Der Naive Bayes hat hier ohne optimierung eine gute Prefomance, kann aber mit optimierung noch besser werden. Er berechnet zunächst die Überlebenswahrscheinlichkeit der Variablen unabhängig voneinander um sie anschließend zu verbinden, das ist ein Vorteil gegenüber dem Decission Tree der sich hierarchisch herunterarbeitet und daher nicht so präzise auf Nuancen eingehen kann.  
+DA der Titanic-Datensatz eher klein ist ist der Naive Bayes gut geignet. Er lernt auch mit jeden Daten dazu und passt das Modell an, leidet also nie an Overfitting, ein großer Vorteil. 
+
+Bei allen drei Algorithmen werden mehr false positive Fälle bei der Prediction vorkommen als false negative. Es wird also bei mehr Menschen ein Überleben vorhergesagt werden, die eigentlich tod sind, als bei Toten ein Überleben. Aber die Algorithmen unterscheiden sich in der Ausgewogenheit der Fehler des Typ I und II und in der Berechnung der Prediction, sowie der Möglichkeit der Optimierung. 
+
