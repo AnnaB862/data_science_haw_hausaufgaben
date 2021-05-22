@@ -1,0 +1,333 @@
+---
+title: "5. Hausaufgabe Bruhn, Anna-Katharina"
+output: html_notebook
+---
+
+## Versuchen Sie die Leser aus dem Buch-Datenset zu clustern: Welche Bücher gehören in welches Cluster?
+
+Library laden
+
+```{r}
+library(tidyverse)
+library(cluster)
+library(caret)
+```
+
+## Alle Datensätze importieren und zu einem Datensatz "books_ratings_users" verbinden
+
+```{r}
+library(readr)
+books <- read_delim("BX-Books.csv", 
+    ";", escape_backslash = TRUE, escape_double = FALSE, 
+    trim_ws = TRUE)
+```
+
+```{r}
+library(readr)
+book_ratings <- read_delim("BX-Book-Ratings.csv", 
+    ";", escape_double = FALSE, trim_ws = TRUE)
+View(book_ratings)
+```
+
+```{r}
+library(readr)
+users <- read_delim("BX-Users.csv", 
+    ";", escape_double = FALSE, trim_ws = TRUE)
+View(users)
+```
+
+## Data cleaning
+
+```{r}
+users <- users %>%
+  mutate(Age = as.numeric(Age)) %>%
+  mutate(Location = str_remove(Location,".*,")) 
+  
+```
+
+Um die Location einheitlicher zu gestallten und verschiedene Schreibweisen eines Ortes zu vermeiden wird es auf die Nennung des Landes beschränkt.
+
+```{r}
+users <- users %>% 
+  mutate(Age = replace(Age, which(Age>99), NA)) %>%
+  mutate(Age = replace(Age, which(Age<6), NA))
+```
+
+Unmögliche und sehr unwahrscheiliche Altersangabe wird durch NA ersetzt. Die Altersangabe wird auf einen Wert zwischen 6 bis 99 Jahre alt beschränkt.
+
+```{r}
+book_ratings$`Book-Rating`[book_ratings$`Book-Rating` == 0] <- NA
+```
+
+Die Bewertung von Büchern ist mit einem Wert von 1-10 angegeben, 0 bedeutet hier, dass keine Bewertung abgegeben worden ist, also ersetze ich das durch NA.
+
+```{r}
+books$`Year-Of-Publication`[books$`Year-Of-Publication` == 0] <- NA
+```
+
+Alle Einträge mit der Angabe 0 bei dem Erscheinungsjahr ersetze ich mit NA, da 0 mit großer Wahrscheinlichkeit keine zutreffende Angabe ist.
+
+```{r}
+books$`Year-Of-Publication`[books$`Year-Of-Publication` >= 2004] <- NA
+```
+
+Die User konnten bis 2004 Bücher bewerten, der Datensatz wurde zu dem Zeitpunkt erstellt. Also sind alle Erscheinungsdaten die größer als 2004 sind falsch und werden durch NA ersetzt.
+
+```{r}
+books <- books %>%
+  mutate(`Book-Author` = str_to_lower(`Book-Author`)) %>%
+  mutate(`Book-Title` = str_to_lower(`Book-Title`)) %>%
+  mutate(Publisher = str_to_lower(Publisher)) %>%
+  mutate(`Book-Author` = str_replace(`Book-Author`,"ç","c")) %>%
+  mutate(`Book-Title` = str_replace(`Book-Title`,"ç","c")) %>%
+  mutate(`Publisher` = str_replace(`Publisher`,"ç","c")) %>%
+  mutate(`Book-Author` = str_replace(`Book-Author`,"ñ","n")) %>%
+  mutate(`Book-Title` = str_replace(`Book-Title`,"ñ","n")) %>%
+  mutate(`Publisher` = str_replace(`Publisher`,"ñ","n")) %>%
+  mutate(`Book-Author` = str_replace(`Book-Author`,"è","e")) %>%
+  mutate(`Book-Title` = str_replace(`Book-Title`,"è","e")) %>%
+  mutate(`Publisher` = str_replace(`Publisher`,"è","e")) %>%
+  mutate(`Book-Author` = str_replace(`Book-Author`,"é","e")) %>%
+  mutate(`Book-Title` = str_replace(`Book-Title`,"é","e")) %>%
+  mutate(`Publisher` = str_replace(`Publisher`,"é","e")) %>%
+  mutate(`Book-Author` = str_replace(`Book-Author`,"ê","e")) %>%
+  mutate(`Book-Title` = str_replace(`Book-Title`,"ê","e")) %>%
+  mutate(`Publisher` = str_replace(`Publisher`,"ê","e")) %>%
+   mutate(`Book-Author` = str_replace(`Book-Author`,"ô","o")) %>%
+  mutate(`Book-Title` = str_replace(`Book-Title`,"ô","o")) %>%
+  mutate(`Publisher` = str_replace(`Publisher`,"ô","o")) %>% 
+   mutate(`Book-Author` = str_replace(`Book-Author`,"à","a")) %>%
+  mutate(`Book-Title` = str_replace(`Book-Title`,"à","a")) %>%
+  mutate(`Publisher` = str_replace(`Publisher`,"à","a")) 
+```
+
+Im Datensatz werden ale Titel und Autoren klein geschrieben und Sonderzeichen werden entfernt.
+
+```{r}
+books_w_ratings <- books %>%
+  select(ISBN, `Book-Title`, `Book-Author`, `Year-Of-Publication`, Publisher) %>%
+  left_join(book_ratings)
+```
+
+## Der neu erstellter Datensatz "book_rating_users"
+
+```{r}
+books_ratings_users <- books_w_ratings %>%
+  left_join(users)
+```
+
+```{r}
+books_ratings_users <- books_ratings_users %>%
+  mutate(ISBN = str_extract(ISBN, "[0-9]*X*"))
+```
+
+Der neu erstellte Datensatz "book_rating_users" wird als csv-Datei gespeichert, damit man mit dem Datensatz weiterarbeiten kann, ohne ihn jedesmal neu erstellen zu müssen.
+
+
+# Hausaufgabe 5
+
+## Versuchen Sie die Leser aus dem Buch-Datenset zu clustern: Welche Bücher gehören in welches Cluster?
+
+## Hierarchisches Clustering
+
+Ich habe zwei verschiedene Lösungen der Aufgabe erarbeitet. In beiden Lösungen, cluster ich die User mit den Variablen "Age" und "Book-Rating". Die "User_ID" entferne ich vor dem clustern, da bei ihr keine Distanz berechnet werden kann. 
+In der ersten Lösung verwende ich die ersten 300 Zeilen des Datensatzes "books_users_ratings", dabei hat man jedoch nur ca. 7 unterschiedliche Bücher nach denen man die User clustert.
+
+Bei der zweiten Lösung habe ich die ersten 200 User-IDs verwendet und habe in diesem Datensatz ca. 47 unterschiedliche Bücher.
+
+# Lösung 1
+
+
+```{r}
+first_books1 <- books_ratings_users[c(1:300),] %>%
+  select(`Book-Title`, `User-ID`, `Age`, `Book-Rating`, ) %>%
+  drop_na(`Book-Rating`) %>% 
+  drop_na(`Age`) %>% 
+  drop_na(`User-ID`) 
+
+```
+
+```{r}
+first_books2 <- first_books1[,-1:-2]
+  
+```
+
+```{r}
+all <- books_ratings_users[c(1:300),]
+```
+
+Distanzmatrix: Standariesierung und Distanzberechnung
+
+```{r}
+(first_books2.dist <- dist(scale(first_books2), method="euclidean"))
+```
+
+```{r}
+first_books2.hc <- hclust(first_books2.dist, method = "complete")
+plot(first_books2.hc)
+```
+```{r}
+first_books2.hc <- hclust(first_books2.dist, method = "complete")
+plot(first_books2.hc)
+groups <- cutree(first_books2.hc, k=3)
+rect.hclust(first_books2.hc, k=3, border = "red")
+```
+
+In den dem Dendogram kann man die Uder in 4 Cluster einteilen.
+
+
+```{r}
+(test <- first_books1) %>%
+  mutate(cluster = groups) %>%
+  left_join(all)%>%
+  arrange(desc(groups))
+```
+
+Im 3. Cluster sind unterschiedlich alte User vertreten, die Bücher aus den 1990er Jahren lesen, im 2. Cluster sind 60+ Leser zu finden, die John grisham lesen. Im 1. Cluster sind eher jüngere John Grisham Leser, die hohe Ratings abgegeben haben.
+
+## K Means Clustering
+
+
+```{r}
+first_books2.scaled <- as.data.frame(scale(first_books2))
+```
+
+Scree-Test
+
+Der Scree-Test untsersucht die Variabilität innerhalb der Cluster in Bezug auf die Anzahl der Cluster.
+
+```{r}
+wss <- (nrow(first_books2.scaled)-1)*sum(apply(first_books2.scaled,2,var))
+  for (i in 2:10) wss[i] <- sum(kmeans(first_books2.scaled, centers=i)$withinss)
+plot(1:10, wss, type="b", xlab="Number of Clusters",
+     ylab="Within groups sum of squares")
+
+
+```
+Der Knick ist bei 4, daher ist k=4.
+
+```{r}
+k.means.fit <- kmeans(first_books2.scaled, 3) 
+```
+
+Wie viele Datenpunkte sind in einem Cluster.
+
+```{r}
+k.means.fit$size
+```
+PCA eine Art der Visualisierung
+
+
+```{r}
+clusplot(first_books2, k.means.fit$cluster, color=TRUE, shade=TRUE,
+labels=4, lines=0, main="K-means cluster plot")
+```
+
+```{r}
+table(first_books1$`Book-Title`,k.means.fit$cluster)
+```
+Die Leser sind recht willkürlich den Büchern zugeordnert. Die Leser sind vermutlich eher nach Alter und Rating geclustert, als nach den Titeln die sie lesen. 
+
+# Lösung 2
+
+Mit DAta Dummys id 300
+```{r}
+first_books1b <- books_ratings_users %>%
+  select(`Book-Title`, `User-ID`, `Age`, `Book-Rating`) %>%
+  drop_na(`Book-Rating`) %>% 
+  drop_na(`Age`) %>% 
+  filter(`User-ID` <= 200) %>%
+  drop_na(`User-ID`) 
+
+```
+
+Ich reduziere die Leser zufällig, auf 200 Zeilen, anhand der User-ID.
+
+```{r}
+first_books2b <- first_books1b[,-1:-2]
+  
+```
+
+Distanzmatrix: Standariesierung und Distanzberechnung
+
+
+```{r}
+(first_books2b.dist <- dist(scale(first_books2b), method="euclidean"))
+```
+
+```{r}
+first_books2b.hc <- hclust(first_books2b.dist, method = "complete")
+plot(first_books2b.hc)
+```
+```{r}
+first_books2b.hc <- hclust(first_books2b.dist, method = "complete")
+plot(first_books2b.hc)
+groups <- cutree(first_books2b.hc, k=3)
+rect.hclust(first_books2b.hc, k=3, border = "red")
+```
+
+
+```{r}
+(test <- first_books1b) %>%
+  mutate(cluster = groups) %>%
+  left_join(books_ratings_users)%>%
+  arrange(desc(groups))
+```
+
+Im 3. Cluster sind User, die eher mittelmäßige Ratings vergeben haben und Bücher aus dem angelsächsischen Sprachraum lesen. Im 2. Cluster sind mittelalte User vertreten, die hohe Ratings vergeben haben. Im 3. Cluster befinden sich junge Leser, mit hohen Ratings und einer Tendenz zu spanischen Titeln.
+
+
+## K Means Clustering
+
+```{r}
+first_books2b.scaled <- as.data.frame(scale(first_books2b))
+```
+
+Scree-Test
+
+Der Scree-Test untsersucht die Variabilität innerhalb der Cluster in Bezug auf die Anzahl der Cluster.
+
+
+```{r}
+wss <- (nrow(first_books2b.scaled)-1)*sum(apply(first_books2b.scaled,2,var))
+  for (i in 2:10) wss[i] <- sum(kmeans(first_books2b.scaled,
+                                       centers=i)$withinss)
+plot(1:10, wss, type="b", xlab="Number of Clusters",
+     ylab="Within groups sum of squares")
+
+
+```
+
+```{r}
+k.means.fit <- kmeans(first_books2b.scaled, 3) 
+```
+
+Wie viele Datenpunkte sind in einem Cluster.
+
+```{r}
+k.means.fit$size
+```
+PCA eine Art der Visualisierung
+
+```{r}
+clusplot(first_books2b, k.means.fit$cluster, color=TRUE, shade=TRUE,
+labels=4, lines=0, main="K-means cluster plot")
+```
+
+```{r}
+table(first_books1b$`Book-Title`,k.means.fit$cluster)
+```
+
+
+# Lassen sich die Leser, anhand der Bücher die sie lesen, Clustern?
+
+Die Leser lassen sich in meiner Lösung 1 und 2 nur bedingt nach den Buchtiteln clustern. Entscheidener für die Einordnung in ein Cluster waren bei beiden Lösungen das Alter und das Rating. Auch ist der Auschnitt des Datensatzes, den man wählt wichtig. In Lösung 1 hat man viele User, aber nur 7 unterschiedliche Bücher. 
+In der 2. Lösung sind es weniger User aber erheblich mehr unterschiedliche Titel.
+
+Letztendlich werden die Leser in beiden Lösungen nach Alter und Rating geclustert. In beiden Fällen kann man die User nicht direkt nach den gelesenen Titeln clustern. Auffällig ist jedoch, dass z. B. die spanischen Titel alle in einem Cluster gelandet sind, daher sind die Titel möglicherweise doch ein Kriterium beim clustern. 
+Die zu untersuchende Datenmenge hätte jedoch größer sein müssen um klare Aussagen zu Usern und Titeln treffen zu können. 
+
+In beiden Fällen kommt man hier zu keinen befriedigenden Lösungen, wenn man die Leser, nach Büchern die sie lesen clustern möchte.
+
+Auffällig ist, dass k sich bei jedem neuen Durchgang in R ändert.In beiden Lösungen ist k 3 oder 4, das ändert sich jedoch jedesmal.
+
