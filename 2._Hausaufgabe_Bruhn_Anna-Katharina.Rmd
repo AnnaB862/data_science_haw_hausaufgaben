@@ -209,16 +209,12 @@ Daher kann man die Pearson-Korrelation nicht anwenden, da die Vorraussetzungen f
 
 # •Kann man mit einer linearen Regression etwas davon vorhersagen?
 
+## Der folgende Plot hat einen Fehler, die Variablen wurden vertauscht. Die Korrektur folgt anschließend.
 ```{r}
 fit <- lm(ratings_vs_books$number_of_books ~ ratings_vs_books$number_of_ratings)
 plot(ratings_vs_books)
 abline(fit)
 ```
-Es besteht ein linearer Zusammenhang zwischen den Variablen, aber es gibt extreme Ausreißer(siehe Boxplot). 
-
-Man kann mit einer linearen Regression eine abhängige Variable durch eine oder auch mehrere unabhängige Variablen erklären und vorhersagen. Hier ist die abhängige Variabel "number_of_ratings" pro Publisher und die unabhängige Variabel ist "number_of_books". Man kann also vorhersagen in welchem Wertebereich weitere Werte liegen werden.
-Für höre x-Werte erhöht sich die Abweichung von der Regressionsgeraden. 
-
 ## Variablen Vertauscht! Korrektur 2.5.21
 
 ```{r}
@@ -226,6 +222,11 @@ fit <- lm(ratings_vs_books$number_of_ratings ~ ratings_vs_books$number_of_books)
 plot(ratings_vs_books)
 abline(fit)
 ```
+
+Es besteht ein linearer Zusammenhang zwischen den Variablen, aber es gibt extreme Ausreißer(siehe Boxplot). 
+
+Man kann mit einer linearen Regression eine abhängige Variable durch eine oder auch mehrere unabhängige Variablen erklären und vorhersagen. Hier ist die abhängige Variabel "number_of_ratings" pro Publisher und die unabhängige Variabel ist "number_of_books". Man kann also vorhersagen in welchem Wertebereich weitere Werte liegen werden.
+Für höre x-Werte erhöht sich die Abweichung von der Regressionsgeraden. 
 
 
 Die Residuen sollten einigermaßen verteilt sein, dass sind sie in dem Streudiagram nicht.
