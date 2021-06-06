@@ -242,11 +242,19 @@ ratings_vs_age_of_books3 <- ratings_vs_age_of_books %>%
   select(`Year-Of-Publication`, number_of_ratings)
 ```
 
-
+## Fehler! - Variablen vertauscht
 ```{r}
 fit <- lm(ratings_vs_age_of_books3$`Year-Of-Publication` ~ ratings_vs_age_of_books3$number_of_ratings)
 plot(ratings_vs_age_of_books3)
 abline(fit)
 ```
+## Korrektur des Fehlers
+
+```{r}
+fit <- lm(ratings_vs_age_of_books3$number_of_ratings ~ ratings_vs_age_of_books3$`Year-Of-Publication`)
+plot(ratings_vs_age_of_books3)
+abline(fit)
+```
+
 In diesem Streudiagram gibt es keinen linearen ZUsammenhang der Variablen, daher kann hier mit der linearen Regression nichts vorhergesagt werden.
 
